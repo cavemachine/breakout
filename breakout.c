@@ -30,6 +30,8 @@ SDL_Surface* block_yellow_s;
 SDL_Texture* block_yellow_t;
 SDL_Surface* block_unbreak_s;
 SDL_Texture* block_unbreak_t;
+SDL_Surface* block_unbreak_ani_s;
+SDL_Texture* block_unbreak_ani_t;
 SDL_Rect block_rect;
 
 SDL_Rect animate_src;
@@ -40,8 +42,8 @@ bool animate_flag = false;
 
 bool ball_increase_x = true;
 bool ball_increase_y = false;
-int ball_increase_value_x = 1;
-int ball_increase_value_y = 1;
+int ball_increase_value_x = 5;
+int ball_increase_value_y = 5;
 SDL_Rect intersect_rect;
 
 struct block {
@@ -74,13 +76,13 @@ int map1[BLOCKS_Y][BLOCKS_X] = {{1,0,0,0,0,1,0,0,0,0,0,0,0},
 				{1,0,1,0,0,0,0,3,0,5,0,0,0},
 				{1,0,1,0,0,0,0,1,0,0,0,0,0},
 				{1,0,4,0,5,0,0,3,0,0,0,0,0},
-				{1,0,4,0,0,0,0,3,0,0,0,0,0},
+				{1,0,4,0,0,5,0,3,0,0,5,0,0},
 				{1,0,1,0,0,0,0,1,0,0,0,0,0},
-				{1,0,4,0,0,0,0,1,0,0,0,0,0},
-				{1,0,1,0,0,0,0,1,0,0,0,0,0},
+				{1,0,4,0,5,0,0,1,0,0,0,5,0},
+				{1,0,1,0,0,5,0,1,0,0,0,0,0},
 				{1,0,1,0,0,0,0,1,0,5,0,0,0},
 				{1,0,4,0,0,0,0,1,0,0,0,0,0},
-				{1,0,1,0,0,0,0,1,0,0,0,0,0},
+				{1,0,1,0,0,0,0,1,0,0,0,5,0},
 				{1,0,1,0,0,0,0,1,0,0,0,0,0},
 				{1,0,1,0,0,0,0,1,0,0,0,0,0},	
 				{1,1,1,1,1,1,1,1,1,1,1,1,1}};
@@ -118,8 +120,12 @@ void init_sprites() {
     block_yellow_s = SDL_LoadBMP("img/block_yellow.bmp");
     block_yellow_t = SDL_CreateTextureFromSurface(renderer, block_yellow_s);
     
-    block_unbreak_s = SDL_LoadBMP("img/pack.bmp");
+    block_unbreak_s = SDL_LoadBMP("img/block_unbreak.bmp");
     block_unbreak_t = SDL_CreateTextureFromSurface(renderer, block_unbreak_s);
+    
+    block_unbreak_ani_s = SDL_LoadBMP("img/pack.bmp");
+    block_unbreak_ani_t = SDL_CreateTextureFromSurface(renderer, block_unbreak_ani_s);
+
     	
     player_rect.h = 10;
     player_rect.w = 50;
@@ -137,7 +143,6 @@ void init_sprites() {
     SDL_RenderCopy(renderer, ball_t, NULL, &ball_rect);   
     SDL_RenderCopy(renderer, player_t, NULL, &player_rect);
     SDL_RenderPresent(renderer);
-    
 }
 
 void render_blocks() {
@@ -149,34 +154,23 @@ void render_blocks() {
 		if (blocks[i][j].animate == false) {
 		    SDL_RenderCopy(renderer, blocks[i][j].block_sprite, NULL, &block_rect);
 		} else {
-		    animate_src.w = 16;
-		    animate_src.h = 8;
-		    animate_src.y = 24;
-		    animate_src.x = blocks[i][j].anim_frame * 16;
-		
-		    animate_dest.w = 35;
-		    animate_dest.h = 15;
-		    animate_dest.x = blocks[i][j].block_x;
-		    animate_dest.y = blocks[i][j].block_y;
-		
-		    SDL_RenderCopy(renderer, blocks[i][j].anim_sprite, &animate_src, &animate_dest);
-		    
+		    SDL_RenderCopy(renderer, blocks[i][j].anim_sprite, &blocks[i][j].anim_src, &blocks[i][j].anim_dest);
 		}
+		
 	    }
 	}
     }
-    
 }
+
 void render_all() {
     SDL_RenderClear(renderer);
-    render_blocks();
+       render_blocks();
     SDL_RenderCopy(renderer, ball_t, NULL, &ball_rect);   
     SDL_RenderCopy(renderer, player_t, NULL, &player_rect);
 
-
     if (animate_flag) {
 	sprite_sub++;
-	if (sprite_sub == 10) {	    
+	if (sprite_sub == 4) {	    
 	    animate_blocks();
 	    sprite_sub = 0;
 	}
@@ -220,102 +214,113 @@ void check_ball_player_collision() {
     }
 }
 
+void break_block(int i, int j) {
+    if (blocks[i][j].unbreakable == false) {
+	if (blocks[i][j].durability == 0) {
+	    blocks[i][j].enabled = false;
+	}
+	if (blocks[i][j].durability != 0) {
+	    blocks[i][j].durability--;			
+	}
+    } else {
+	blocks[i][j].anim_dest.h = BLOCKS_H;
+	blocks[i][j].anim_dest.w = BLOCKS_W;
+	blocks[i][j].anim_dest.x = blocks[i][j].block_x;
+	blocks[i][j].anim_dest.y = blocks[i][j].block_y;
+	
+	blocks[i][j].anim_src.x = 0;
+	blocks[i][j].anim_src.y = 24;
+	blocks[i][j].anim_src.h = 8;
+	blocks[i][j].anim_src.w = 16;
+	
+        blocks[i][j].anim_frame = 0;
+	blocks[i][j].anim_frame_max = 6;
+	blocks[i][j].animate = true;	
+	animate_flag = true;
+	    	
+    }
+}
+
 void check_ball_blocks_collision() {
+    
+    /* check if intersection happened; if so then find the closest side (left right up or down) of the 
+       intersection coord (inter_rect.x and y) to figure out where the ball touched the block; If the ball
+       is already partially inside the block, moves the ball position to be exactly at the
+       border of the block; then change ball moving direction based on the current ball moving direction;
+       finally call break_block to reduce block durability or destroy it. */
+    
     for (int i = 0; i < BLOCKS_Y; i++) {
 	for (int j = 0; j < BLOCKS_X; j++) {
 	    
 	    if (blocks[i][j].enabled == true) {		
 		block_rect.x = blocks[i][j].block_x;
 		block_rect.y = blocks[i][j].block_y;
+		
 		SDL_Rect inter_rect;
 		if (SDL_IntersectRect(&block_rect, &ball_rect, &inter_rect)) {
-		    printf("x collision %i ... %i\n", inter_rect.x, blocks[i][j].block_x);
-		    
-		    if ((inter_rect.x == blocks[i][j].block_x && ball_increase_x) ||
-			(inter_rect.x == blocks[i][j].block_x + BLOCKS_W && !ball_increase_x)) {	
-			ball_increase_x = !ball_increase_x;
-		    } else {		    
-			if ((inter_rect.y == blocks[i][j].block_y && ball_increase_y) ||
-			    (inter_rect.y == blocks[i][j].block_y + BLOCKS_H && !ball_increase_y)) {	
-			    ball_increase_y = !ball_increase_y;
-			}
-		    }
-
-		    //-------------------------------------------
-		    if (inter_rect.x != blocks[i][j].block_x &&
-		    	inter_rect.x != blocks[i][j].block_x + BLOCKS_W &&
-		    	inter_rect.y != blocks[i][j].block_y &&
-		    	inter_rect.y != blocks[i][j].block_y + BLOCKS_H) {
-
-			int m[4];
-			m[0] = blocks[i][j].block_x - inter_rect.x; // left
-			m[1] = blocks[i][j].block_x + BLOCKS_W - inter_rect.x; // right
-			m[2] = blocks[i][j].block_y - inter_rect.y; // up
-			m[3] = blocks[i][j].block_y + BLOCKS_H - inter_rect.y; //down
+	    
+		    int m[4];
+		    m[0] = blocks[i][j].block_x - inter_rect.x; // left
+		    m[1] = blocks[i][j].block_x + BLOCKS_W - inter_rect.x; // right
+		    m[2] = blocks[i][j].block_y - inter_rect.y; // up
+		    m[3] = blocks[i][j].block_y + BLOCKS_H - inter_rect.y; //down
 			
-			int smaller = abs(m[0]);
-			int smaller_index;
-			for (int i = 0; i < 4; i++) {
-			    if (i != 3) {
-				if (smaller > abs( m[i+1] )) {
-				    smaller = abs( m[i+1] );
-				    smaller_index = i+1;
-				}
-			    }
-			    if (i == 3) {
-				if (smaller > abs( m[i] )) {
-				    smaller = abs( m[i] );
-				    smaller_index = i;
-				}
+		    int smaller = abs(m[0]);
+		    int smaller_index;
+		    for (int i = 0; i < 4; i++) {
+			if (i != 3) {
+			    if (smaller > abs( m[i+1] )) {
+				smaller = abs( m[i+1] );
+				smaller_index = i+1;
 			    }
 			}
-			
-			switch (smaller_index) {
-			case 0:
-			    ball_rect.x = ball_rect.x - m[0] - 1;
-			    ball_increase_x = !ball_increase_x;
-			    break;
-			case 1:
-			    ball_rect.x = ball_rect.x + m[1] + 1;
-			    ball_increase_x = !ball_increase_x;
-			    break;
-			case 2:
-			    ball_rect.y = ball_rect.y - m[2] - 1;
-			    ball_increase_y = !ball_increase_y;
-			    break;
-			case 3:
-			    ball_rect.y = ball_rect.y + m[3] + 1;
-			    ball_increase_y = !ball_increase_y;
-			    break;    
+			if (i == 3) {
+			    if (smaller > abs( m[i] )) {
+				smaller = abs( m[i] );
+				smaller_index = i;
+			    }
 			}
-			
-			    printf("all values: %i %i %i %i\n", m[0], m[1], m[2], m[3]);
-			    printf("smaller index: %i\n", smaller_index);
-		    	/* printf("OPA\n"); */
-		    	/* printf("inter x: %i .. block x: %i _ %i\n ", */
-		    	/*        inter_rect.x, blocks[i][j].block_x, blocks[i][j].block_x + 35); */
-		    	/* printf("inter y: %i .. block y: %i _ %i\n", */
-		    	/*        inter_rect.y, blocks[i][j].block_y, blocks[i][j].block_y + 15); */
-			
 		    }
-		    
-		    if (blocks[i][j].unbreakable == false) {
-			if (blocks[i][j].durability == 0) {
-			    blocks[i][j].enabled = false;
+		    switch(smaller_index) {
+		    case 0:
+			ball_rect.x = ball_rect.x - m[0] ;
+			if (ball_increase_x) {
+			    ball_increase_x = !ball_increase_x;
+			} else {
+			    ball_increase_y = !ball_increase_y; 			    
 			}
-			if (blocks[i][j].durability != 0) {
-			    blocks[i][j].durability--;			
+			break;
+		    case 1:
+			ball_rect.x = ball_rect.x + m[1] ;
+			if (!ball_increase_x) {
+			    ball_increase_x = !ball_increase_x;
+			} else {
+			    ball_increase_y = !ball_increase_y; 
 			}
-		    } else {
-			// animate unbreakble block 			
+			break;
+		    case 2:
+			ball_rect.y = ball_rect.y - m[2] ;
+			if (ball_increase_y) {
+			    ball_increase_y = !ball_increase_y;
+			} else {
+			    ball_increase_x = !ball_increase_x; 			    
+			}
+			break;
+		    case 3:
+			ball_rect.y = ball_rect.y + m[3] ;
+			if (!ball_increase_y) {
+			    ball_increase_y = !ball_increase_y;
+			} else {
+			    ball_increase_x = !ball_increase_x;
+			}
+			break;    
 		    }
-		    
+		    break_block(i,j);  
 		}
 	    }
 	}
     }
 }
-
 
 void pong_ball() {
 
@@ -379,6 +384,7 @@ void init_level(int level){
 		    blocks[i][j].enabled = true;
 		    blocks[i][j].unbreakable = true;
 		    blocks[i][j].block_sprite = block_unbreak_t;
+		    blocks[i][j].anim_sprite = block_unbreak_ani_t;
 		    blocks[i][j].block_x = 1 + (j*(BLOCKS_W+3));
 		    blocks[i][j].block_y = 1 + (i*(BLOCKS_H+3));	    
 		}		
@@ -395,17 +401,7 @@ void animate_blocks() {
 	    if (blocks[i][j].animate == true) {
 		
 		global_animation = true;
-		animate_src.w = 16;
-		animate_src.h = 8;
-		animate_src.y = 24;
-		animate_src.x = blocks[i][j].anim_frame * 16;
-		
-		animate_dest.w = 35;
-		animate_dest.h = 15;
-		animate_dest.x = blocks[i][j].block_x;
-		animate_dest.y = blocks[i][j].block_y;
-		
-		SDL_RenderCopy(renderer, blocks[i][j].anim_sprite, &animate_src, &animate_dest);
+		blocks[i][j].anim_src.x = blocks[i][j].anim_frame * blocks[i][j].anim_src.w;
 		
 		blocks[i][j].anim_frame++;
 		if (blocks[i][j].anim_frame == blocks[i][j].anim_frame_max) {
