@@ -19,6 +19,7 @@ SDL_Rect player_rect;
 SDL_Surface* ball_s;
 SDL_Texture* ball_t;
 SDL_Rect ball_rect;
+SDL_Rect ball_rect_prev;
 
 SDL_Surface* block_green_s;
 SDL_Texture* block_green_t;
@@ -28,6 +29,10 @@ SDL_Surface* block_red_s;
 SDL_Texture* block_red_t;
 SDL_Surface* block_yellow_s;
 SDL_Texture* block_yellow_t;
+SDL_Surface* block_yellow_d1_s;
+SDL_Texture* block_yellow_d1_t;
+SDL_Surface* block_yellow_d2_s;
+SDL_Texture* block_yellow_d2_t;
 SDL_Surface* block_unbreak_s;
 SDL_Texture* block_unbreak_t;
 SDL_Surface* block_unbreak_ani_s;
@@ -45,6 +50,8 @@ bool ball_increase_y = false;
 int ball_increase_value_x = 5;
 int ball_increase_value_y = 5;
 SDL_Rect intersect_rect;
+bool colision_prot;
+int colision_prot_inc = 0;
 
 struct block {
     bool enabled;
@@ -64,28 +71,34 @@ struct block {
     SDL_Rect anim_dest;
 };
 
+struct ball {
+    bool enabled;
+    SDL_Rect ball_rect;
+};
+
+struct ball balls[5];
 struct block blocks[BLOCKS_Y][BLOCKS_X];
 
-int map1[BLOCKS_Y][BLOCKS_X] = {{1,0,0,0,0,1,0,0,0,0,0,0,0},
-				{1,0,1,0,0,0,0,1,0,0,0,0,0},
-				{1,2,0,0,0,2,0,0,0,0,0,0,0},
-				{1,0,0,0,5,1,0,0,0,0,0,0,0},
-				{1,0,1,0,0,0,0,1,0,5,0,0,0},
-				{1,1,0,0,0,2,0,0,0,0,0,0,0},
-				{1,0,0,0,0,1,0,0,0,0,0,0,0},
-				{1,0,1,0,0,0,0,3,0,5,0,0,0},
-				{1,0,1,0,0,0,0,1,0,0,0,0,0},
-				{1,0,4,0,5,0,0,3,0,0,0,0,0},
-				{1,0,4,0,0,5,0,3,0,0,5,0,0},
-				{1,0,1,0,0,0,0,1,0,0,0,0,0},
-				{1,0,4,0,5,0,0,1,0,0,0,5,0},
-				{1,0,1,0,0,5,0,1,0,0,0,0,0},
-				{1,0,1,0,0,0,0,1,0,5,0,0,0},
-				{1,0,4,0,0,0,0,1,0,0,0,0,0},
-				{1,0,1,0,0,0,0,1,0,0,0,5,0},
-				{1,0,1,0,0,0,0,1,0,0,0,0,0},
-				{1,0,1,0,0,0,0,1,0,0,0,0,0},	
-				{1,1,1,1,1,1,1,1,1,1,1,1,1}};
+int map1[BLOCKS_Y][BLOCKS_X] = {{0,0,0,0,0,1,0,5,0,0,0,0,0},
+				{1,0,0,0,0,0,0,5,0,0,0,0,0},
+				{1,2,5,0,0,2,0,5,0,0,0,0,0},
+				{1,2,3,0,5,1,0,5,0,0,0,0,0},
+				{1,2,3,4,0,0,0,5,0,5,0,0,0},
+				{1,2,3,1,2,0,0,5,0,0,0,0,0},
+				{1,4,5,1,2,3,0,5,0,0,0,0,0},
+				{1,2,3,1,2,3,1,5,0,5,0,0,0},
+				{4,2,4,5,2,3,1,5,0,0,0,0,0},
+				{1,2,3,1,2,3,1,5,3,0,0,0,0},
+				{5,5,5,5,5,5,5,5,5,5,5,5,1},
+				{0,0,0,0,0,0,0,0,0,0,0,0,0},
+				{0,0,0,0,0,0,0,0,0,0,0,0,0},
+				{0,0,0,0,0,0,0,0,0,0,0,0,0},
+				{0,0,0,0,0,0,0,0,0,0,0,0,0},
+				{0,0,0,0,0,0,0,0,0,0,0,0,0},
+				{0,0,0,0,0,0,0,0,0,0,0,0,0},
+				{0,0,0,0,0,0,0,0,0,0,0,0,0},
+				{0,0,0,0,0,0,0,0,0,0,0,0,0},	
+				{0,0,0,0,0,0,0,0,0,0,0,0,0}};
 void animate_blocks();
 
 //----------------------------------------------------------
@@ -120,6 +133,12 @@ void init_sprites() {
     block_yellow_s = SDL_LoadBMP("img/block_yellow.bmp");
     block_yellow_t = SDL_CreateTextureFromSurface(renderer, block_yellow_s);
     
+    block_yellow_d1_s = SDL_LoadBMP("img/block_yellow_d1.bmp");
+    block_yellow_d1_t = SDL_CreateTextureFromSurface(renderer, block_yellow_d1_s);
+    
+    block_yellow_d2_s = SDL_LoadBMP("img/block_yellow_d2.bmp");
+    block_yellow_d2_t = SDL_CreateTextureFromSurface(renderer, block_yellow_d2_s);
+    
     block_unbreak_s = SDL_LoadBMP("img/block_unbreak.bmp");
     block_unbreak_t = SDL_CreateTextureFromSurface(renderer, block_unbreak_s);
     
@@ -130,12 +149,12 @@ void init_sprites() {
     player_rect.h = 10;
     player_rect.w = 50;
     player_rect.x = WINDOW_W / 2;
-    player_rect.y = WINDOW_H - 20;
+    player_rect.y = WINDOW_H - 15;
 
     ball_rect.h = 5;
     ball_rect.w = 5;
-    ball_rect.x = 200;
-    ball_rect.y = 250;
+    ball_rect.x = 100;
+    ball_rect.y = 100;
 
     block_rect.h = BLOCKS_H;
     block_rect.w = BLOCKS_W;
@@ -218,10 +237,18 @@ void break_block(int i, int j) {
     if (blocks[i][j].unbreakable == false) {
 	if (blocks[i][j].durability == 0) {
 	    blocks[i][j].enabled = false;
+	    return;
 	}
-	if (blocks[i][j].durability != 0) {
-	    blocks[i][j].durability--;			
+	if (blocks[i][j].durability == 2) {
+	    blocks[i][j].durability--;
+	    blocks[i][j].block_sprite = block_yellow_d1_t;
+	    return;
 	}
+	if (blocks[i][j].durability == 1) {
+	    blocks[i][j].durability--;
+	    blocks[i][j].block_sprite = block_yellow_d2_t;
+	    return;
+	}	
     } else {
 	blocks[i][j].anim_dest.h = BLOCKS_H;
 	blocks[i][j].anim_dest.w = BLOCKS_W;
@@ -248,7 +275,7 @@ void check_ball_blocks_collision() {
        is already partially inside the block, moves the ball position to be exactly at the
        border of the block; then change ball moving direction based on the current ball moving direction;
        finally call break_block to reduce block durability or destroy it. */
-    
+
     for (int i = 0; i < BLOCKS_Y; i++) {
 	for (int j = 0; j < BLOCKS_X; j++) {
 	    
@@ -258,7 +285,13 @@ void check_ball_blocks_collision() {
 		
 		SDL_Rect inter_rect;
 		if (SDL_IntersectRect(&block_rect, &ball_rect, &inter_rect)) {
-	    
+
+		    if (blocks[i][j].block_x != inter_rect.x &&
+			blocks[i][j].block_y != inter_rect.y &&
+			blocks[i][j].block_x + BLOCKS_W != inter_rect.y &&
+			blocks[i][j].block_y + BLOCKS_H != inter_rect.y) {
+			ball_rect = ball_rect_prev;
+		    }
 		    int m[4];
 		    m[0] = blocks[i][j].block_x - inter_rect.x; // left
 		    m[1] = blocks[i][j].block_x + BLOCKS_W - inter_rect.x; // right
@@ -268,54 +301,62 @@ void check_ball_blocks_collision() {
 		    int smaller = abs(m[0]);
 		    int smaller_index;
 		    for (int i = 0; i < 4; i++) {
-			if (i != 3) {
-			    if (smaller > abs( m[i+1] )) {
-				smaller = abs( m[i+1] );
-				smaller_index = i+1;
-			    }
-			}
-			if (i == 3) {
-			    if (smaller > abs( m[i] )) {
-				smaller = abs( m[i] );
-				smaller_index = i;
-			    }
-			}
+		    	if (i != 3) {
+		    	    if (smaller > abs( m[i+1] )) {
+		    		smaller = abs( m[i+1] );
+		    		smaller_index = i+1;
+		    	    }
+		    	}
+		    	if (i == 3) {
+		    	    if (smaller > abs( m[i] )) {
+		    		smaller = abs( m[i] );
+		    		smaller_index = i;
+		    	    }
+		    	}
 		    }
+		    
+		    int n;
 		    switch(smaller_index) {
 		    case 0:
-			ball_rect.x = ball_rect.x - m[0] ;
-			if (ball_increase_x) {
-			    ball_increase_x = !ball_increase_x;
+		    	//ball_rect.x = ball_rect.x - m[0] -2;
+	
+			if (ball_increase_x && !blocks[i][j-1].enabled) {
+			    if (j-1 != -1) {
+				ball_increase_x = !ball_increase_x;
+			    }
 			} else {
 			    ball_increase_y = !ball_increase_y; 			    
-			}
+			}		    
 			break;
 		    case 1:
-			ball_rect.x = ball_rect.x + m[1] ;
-			if (!ball_increase_x) {
+
+			//ball_rect.x = ball_rect.x + m[1] +2;
+			if (!ball_increase_x && !blocks[i][j+1].enabled) {
 			    ball_increase_x = !ball_increase_x;
 			} else {
 			    ball_increase_y = !ball_increase_y; 
 			}
 			break;
-		    case 2:
-			ball_rect.y = ball_rect.y - m[2] ;
-			if (ball_increase_y) {
+		    case 2:			
+			//ball_rect.y = ball_rect.y - m[2] -2;
+			if (ball_increase_y && !blocks[i-1][j].enabled) {
 			    ball_increase_y = !ball_increase_y;
 			} else {
 			    ball_increase_x = !ball_increase_x; 			    
 			}
 			break;
-		    case 3:
-			ball_rect.y = ball_rect.y + m[3] ;
-			if (!ball_increase_y) {
+		    case 3:			
+			//ball_rect.y = ball_rect.y + m[3] +2;
+			if (!ball_increase_y && !blocks[i+1][j].enabled) {
 			    ball_increase_y = !ball_increase_y;
 			} else {
 			    ball_increase_x = !ball_increase_x;
 			}
-			break;    
+			break;
+	  
 		    }
-		    break_block(i,j);  
+		    break_block(i,j);
+		    return;
 		}
 	    }
 	}
@@ -325,22 +366,26 @@ void check_ball_blocks_collision() {
 void pong_ball() {
 
     if (ball_increase_x) {
+	ball_rect_prev = ball_rect;
 	ball_rect.x += ball_increase_value_x;
 	if (ball_rect.x >= WINDOW_W) { ball_increase_x = false; }
     } else {
+	ball_rect_prev = ball_rect;
 	ball_rect.x -= ball_increase_value_x;
-	if (ball_rect.x < 0) { ball_increase_x = true; }
+	if (ball_rect.x <= 0) { ball_increase_x = true; }
     }
     
     if (ball_increase_y) {
+	ball_rect_prev = ball_rect;	
 	ball_rect.y += ball_increase_value_y;
 	if (ball_rect.y >= WINDOW_H) { ball_increase_y = false; }
     } else {
+	ball_rect_prev = ball_rect;	
 	ball_rect.y -= ball_increase_value_y;
-	if (ball_rect.y < 0) { ball_increase_y = true; }
+	if (ball_rect.y <= 0) { ball_increase_y = true; }
     }
     
-    check_ball_player_collision();
+      check_ball_player_collision();
     
     check_ball_blocks_collision();
 
@@ -356,37 +401,37 @@ void init_level(int level){
 		    blocks[i][j].enabled = true;
 		    blocks[i][j].durability = 0;
 		    blocks[i][j].block_sprite = block_red_t;
-		    blocks[i][j].block_x = 1 + (j*(BLOCKS_W+3));
-		    blocks[i][j].block_y = 1 + (i*(BLOCKS_H+3));	    
+		    blocks[i][j].block_x = (j*(BLOCKS_W+3));
+		    blocks[i][j].block_y = (i*(BLOCKS_H+3));	    
 		}
 		if (map1[i][j] == 2) {
 		    blocks[i][j].enabled = true;
 		    blocks[i][j].durability = 0;
 		    blocks[i][j].block_sprite = block_blue_t;
-		    blocks[i][j].block_x = 1 + (j*(BLOCKS_W+3));
-		    blocks[i][j].block_y = 1 + (i*(BLOCKS_H+3));	    
+		    blocks[i][j].block_x = (j*(BLOCKS_W+3));
+		    blocks[i][j].block_y = (i*(BLOCKS_H+3));	    
 		}
 		if (map1[i][j] == 3) {
 		    blocks[i][j].enabled = true;
 		    blocks[i][j].durability = 0;
 		    blocks[i][j].block_sprite = block_green_t;
-		    blocks[i][j].block_x = 1 + (j*(BLOCKS_W+3));
-		    blocks[i][j].block_y = 1 + (i*(BLOCKS_H+3));	    
+		    blocks[i][j].block_x = (j*(BLOCKS_W+3));
+		    blocks[i][j].block_y = (i*(BLOCKS_H+3));	    
 		}
 		if (map1[i][j] == 4) {
 		    blocks[i][j].enabled = true;
 		    blocks[i][j].durability = 2;
 		    blocks[i][j].block_sprite = block_yellow_t;
-		    blocks[i][j].block_x = 1 + (j*(BLOCKS_W+3));
-		    blocks[i][j].block_y = 1 + (i*(BLOCKS_H+3));	    
+		    blocks[i][j].block_x = (j*(BLOCKS_W+3));
+		    blocks[i][j].block_y = (i*(BLOCKS_H+3));	    
 		}
 		if (map1[i][j] == 5) {
 		    blocks[i][j].enabled = true;
 		    blocks[i][j].unbreakable = true;
 		    blocks[i][j].block_sprite = block_unbreak_t;
 		    blocks[i][j].anim_sprite = block_unbreak_ani_t;
-		    blocks[i][j].block_x = 1 + (j*(BLOCKS_W+3));
-		    blocks[i][j].block_y = 1 + (i*(BLOCKS_H+3));	    
+		    blocks[i][j].block_x = (j*(BLOCKS_W+3));
+		    blocks[i][j].block_y = (i*(BLOCKS_H+3));	    
 		}		
 	    }
 	}
